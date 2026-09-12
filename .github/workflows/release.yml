@@ -13,6 +13,8 @@ concurrency:
 
 jobs:
   publish:
+    # The local-AI fork is installed from Git; never publish over upstream's npm name.
+    if: github.repository == 'nicobailon/pi-subagents'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

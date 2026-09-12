@@ -2,7 +2,13 @@
   <img src="https://raw.githubusercontent.com/nicobailon/pi-subagents/main/banner.png" alt="pi-subagents" width="1100">
 </p>
 
-# pi-subagents
+# pi-subagents — local-AI fork
+
+Maintained by [JordiPosthumus](https://github.com/JordiPosthumus), based on [nicobailon/pi-subagents](https://github.com/nicobailon/pi-subagents) v0.67.0. This fork is for **long-running local inference**: queue waits, large prefills, reasoning, and pauses in generation must not silently kill a subagent. Upstream author and MIT licensing are preserved.
+
+The opt-in owner policy `localInference.enabled: true` disables automatic inference and run deadlines, even when an agent asks for a shorter one. Manual stop/cancel still works. It does not lower concurrency, context, output limits, or thinking. [Policy, limitations, and regression evidence](docs/local-ai.md).
+
+**Use this fork's Git source and tested updates.** `npm:pi-subagents` installs upstream and does not include this fix. The maintained branch is `codex/local-ai`; `main` tracks the original fork point.
 
 `pi-subagents` lets Pi delegate work to focused child agents. Use it for code review, scouting, implementation, parallel audits, saved workflows, background jobs, and anything else that benefits from a second or third set of model eyes.
 
@@ -11,10 +17,12 @@
 ## Install
 
 ```bash
-pi install npm:pi-subagents
+pi install git:github.com/JordiPosthumus/pi-subagents@codex/local-ai
 ```
 
-That is the only required step. Background children use the host's SDK: npm Pi keeps its detached Node runner; the official Pi 0.85.1 Linux x64 standalone release loads the same runner through Pi's embedded SDK, without a separate SDK install. See [Standalone background execution](docs/standalone-background.md) for the supported boundary and validation gate.
+Then merge `"localInference": { "enabled": true }` into `~/.pi/agent/extensions/subagent/config.json` and reload Pi when existing work is idle. Back up the file first; preserve its other settings. Use [the checked installer/updater](docs/local-ai.md#installation-and-updates) for a tested, commit-pinned installation.
+
+ Background children use the host's SDK: npm Pi keeps its detached Node runner; the official Pi 0.85.1 Linux x64 standalone release loads the same runner through Pi's embedded SDK, without a separate SDK install. See [Standalone background execution](docs/standalone-background.md) for the supported boundary and validation gate.
 
 ## Try this first
 
