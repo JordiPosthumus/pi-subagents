@@ -1,0 +1,8 @@
+{
+  "localInference": {
+    "enabled": true
+  },
+  "modelExclusions": {
+    "defaultTtlMs": 60000
+  }
+}
