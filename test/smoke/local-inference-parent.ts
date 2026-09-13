@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import registerSubagents from "../../index.ts";
+import { clearExclusions, recordModelFailure } from "../../src/runs/shared/model-exclusions.ts";
 import { requestAsyncStop } from "../../src/runs/background/control-channel.ts";
 import { getActiveAsyncCapacitySnapshot } from "../../src/runs/background/active-async-capacity.ts";
 
@@ -32,6 +33,29 @@ export default function localInferenceRegression(pi: ExtensionAPI) {
 		try {
 			assert.ok(tool);
 			const invoke = (input: unknown) => tool!.execute("local-ai-regression", input as never, new AbortController().signal, undefined, ctx);
+			// Reproduce the incident through the public tool: all models excluded before spawn.
+			recordModelFailure({ provider: "local-fixture", modelId: "local-test", reason: "fixture exclusion", ttlMs: 60000 });
+			const rejected = await invoke({
+				workflowScript: `return await runs.all([{ key: "rejected", agent: "local-fixture", task: "TEST_QUICK", output: false, acceptance: false }]);`,
+				async: true, context: "fresh", output: false, acceptance: false,
+			});
+			assert.notEqual(rejected.isError, true, JSON.stringify(rejected));
+			const rejectedDir = (rejected.details as { asyncDir: string }).asyncDir;
+			const rejectedStatus = await waitJson(path.join(rejectedDir, "status.json"), (s) => !["queued", "running"].includes(s.state));
+			assert.equal(rejectedStatus.steps[0].status, "failed");
+			assert.match(rejectedStatus.steps[0].error, /exclu/i);
+			assert.equal(rejectedStatus.steps[0].async, false, "rejected preparation must not claim a launched background child");
+			assert.equal(rejectedStatus.steps[0].runId, undefined);
+			assert.equal(getActiveAsyncCapacitySnapshot(rejectedStatus.sessionId, 1).used, 0, "rejected workflow must release capacity");
+			clearExclusions();
+			console.log("PASS rejected workflow child: no phantom launch, capacity released; next workflow can launch");
+
+			await assert.rejects(
+				invoke({ agent: "local-fixture", task: "TEST_QUICK", async: true, outputMode: "file-and-inline" }),
+				/outputMode must be/,
+			);
+			assert.equal(getActiveAsyncCapacitySnapshot(rejectedStatus.sessionId, 1).used, 0);
+
 			const launch = await invoke({
 				workflowScript: `return await runs.all([
 					{ key: "headers", agent: "local-fixture", task: "TEST_HEADERS", timeoutMs: 1, output: false, acceptance: false },

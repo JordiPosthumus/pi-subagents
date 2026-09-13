@@ -216,6 +216,8 @@ interface AsyncChainParams {
 }
 
 interface AsyncSingleParams {
+	/** Publish workflow ownership after lifecycle persistence and before runner proceed. */
+	onLaunch?: () => void;
 	agent: string;
 	task?: string;
 	/** Raw caller-facing goal used only by the started event. */
@@ -2007,7 +2009,10 @@ export function executeAsyncSingle(
 			},
 			path.join(asyncDir, "status.json"),
 			(proof) => emitProcessTerminalEvent(ctx, proof),
-			(runnerProcessInstanceId) => params.activeAsyncCapacity?.markStarted(runnerProcessInstanceId),
+			(runnerProcessInstanceId) => {
+				params.activeAsyncCapacity?.markStarted(runnerProcessInstanceId);
+				params.onLaunch?.();
+			},
 			params.requestedCwd ?? runnerCwd,
 		);
 	} catch (error) {
