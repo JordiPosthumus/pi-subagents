@@ -11,10 +11,11 @@ import { MAX_ABANDONED_SLOT_RELEASE_AFTER_MS, MIN_ABANDONED_SLOT_RELEASE_AFTER_M
 import { normalizeWorktreeBranchPrefix } from "../runs/shared/worktree.ts";
 import { validateModelResponseAliases } from "../shared/model-response-aliases.ts";
 import { validateDisabledFeatures } from "../shared/disabled-features.ts";
+import { localInferenceEnabled } from "../runs/shared/local-inference-policy.ts";
 
 // Explicit route identity, worktree, checkpoint, and tool-surface policies must not be silently
 // discarded and replaced by the built-in defaults after validation fails.
-const FAIL_CLOSED_CONFIG_KEYS = ["worktreeProvider", "worktreeBranchPrefix", "modelResponseAliases", "modelExclusions", "checkpointBeforeDeadlineMs", "disabledFeatures", "scheduledRuns", "toolActivation", "authorityPolicy", "permissions", "toolBudget", "runnerLaunchers"];
+const FAIL_CLOSED_CONFIG_KEYS = ["worktreeProvider", "worktreeBranchPrefix", "modelResponseAliases", "modelExclusions", "checkpointBeforeDeadlineMs", "disabledFeatures", "scheduledRuns", "toolActivation", "authorityPolicy", "permissions", "toolBudget", "runnerLaunchers", "localInference"];
 
 const ARTIFACT_DIR_PREFERENCES = new Set<ArtifactDirPreference>(["project", "session", "temp"]);
 const FLEET_KEYBINDING_ACTION_SET = new Set<string>(FLEET_KEYBINDING_ACTIONS);
@@ -147,6 +148,7 @@ function validateMainWindowRendererConfig(value: unknown): void {
 }
 
 function validateConfig(config: Record<string, unknown>): void {
+	localInferenceEnabled(config as ExtensionConfig);
 	if (config.worktree !== undefined && typeof config.worktree !== "boolean") {
 		throw new Error("config.worktree must be a boolean");
 	}

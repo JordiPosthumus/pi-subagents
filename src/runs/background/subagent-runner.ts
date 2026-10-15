@@ -5,6 +5,25 @@ import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 import type { Message } from "@earendil-works/pi-ai";
 import { installRunnerHttpDispatcher } from "./runner-http-dispatcher.ts";
+import { arbitrateCompletionGuardRescue, createTaskMutationArbiter } from "../shared/llm-intent-arbiter.ts";
+import { readLocalInferencePolicy, withoutExecutionDeadline, LOCAL_INFERENCE_POLICY_NOTICE } from "../shared/local-inference-policy.ts";
+
+// Detached runners skip Pi's CLI proxy setup. Keep fetch on the same Undici dispatcher.
+function ensureProxyAwareHttpDispatcher(): void {
+	try {
+		// SAFETY: require loads the pinned direct dependency described by these types.
+		const undici = createRequire(import.meta.url)("undici") as typeof import("undici");
+		const dispatcher = new undici.EnvHttpProxyAgent({ allowH2: false });
+		// Fetch rejects stream errors; the listener prevents an unhandled EventEmitter error.
+		EventEmitter.prototype.on.call(dispatcher, "error", () => {});
+		undici.setGlobalDispatcher(dispatcher);
+		undici.install();
+	} catch (error) {
+		console.error(`[pi-subagents] proxy-aware HTTP dispatcher not installed: ${error instanceof Error ? error.message : String(error)}`);
+	}
+}
+const isRunnerEntrypoint = Boolean(process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href);
+if (isRunnerEntrypoint) ensureProxyAwareHttpDispatcher();
 import { writeAtomicJson } from "../../shared/atomic-json.ts";
 import { withResultRunLease, writeAsyncResultFile, writePendingAsyncResultFile } from "./result-files.ts";
 import { createFileCoalescer } from "../../shared/file-coalescer.ts";
@@ -1837,6 +1856,7 @@ async function runSingleStepWithTimeout(
 	ctx: SingleStepContext,
 	parentDeadlineAt?: number,
 ): Promise<SingleStepResult> {
+	if (readLocalInferencePolicy()) return runSingleStep(withoutExecutionDeadline(step), withoutExecutionDeadline(ctx));
 	if (step.timeoutMs === undefined) return runSingleStep(step, parentDeadlineAt === undefined ? ctx : {
 		...ctx,
 		deadlineAt: ctx.deadlineAt === undefined ? parentDeadlineAt : Math.min(ctx.deadlineAt, parentDeadlineAt),
@@ -1881,6 +1901,11 @@ export async function runSubagent(
 	config: SubagentRunConfig,
 	childSessions: ChildSessionFactory,
 ): Promise<void> {
+	if (readLocalInferencePolicy()) {
+		config = withoutExecutionDeadline(config);
+		config.steps = config.steps.map((step) => withoutExecutionDeadline(step));
+		console.error(LOCAL_INFERENCE_POLICY_NOTICE);
+	}
 	const { id, steps, resultPath, cwd, placeholder, taskIndex, totalTasks, maxOutput, artifactsDir, artifactConfig } =
 		config;
 	const globalSemaphore = new Semaphore(config.globalConcurrencyLimit ?? DEFAULT_GLOBAL_CONCURRENCY_LIMIT);

@@ -21,6 +21,16 @@ import { PI_CODING_AGENT_PACKAGE, resolveInstalledPiPackageRoot, resolvePiPackag
 import type { ChildRuntimeConfig } from "./child-runtime-config.ts";
 import type { RequiredChildExtensionSnapshot } from "../../shared/required-child-extensions.ts";
 import type { HerdrMachineReference, HerdrRemoteGitStatus } from "../../shared/types.ts";
+import { prepareReadonlySessionEvidence } from "./readonly-session-evidence.ts";
+import { toModelInfo, type ModelInfo } from "../../shared/model-info.ts";
+import { readLocalInferencePolicy, LOCAL_INFERENCE_POLICY_NOTICE } from "./local-inference-policy.ts";
+import { createLocalInferenceTransport } from "./local-inference-transport.ts";
+
+// Private runtime authority for host continuation planning; injected factories have none.
+const readonlyModels = new WeakMap<ChildSession, { current: ModelInfo; resolve(reference: string): ModelInfo | undefined; requestBytes: number }>();
+export function getReadonlyChildModels(child: ChildSession) {
+	return readonlyModels.get(child);
+}
 
 export interface ChildSessionEvent {
 	type: string;
@@ -455,6 +465,9 @@ export function createDefaultChildSessionFactory(options: DefaultChildSessionFac
 	return {
 		async create(launch) {
 			const disposalsAtStart = disposals;
+			const localInference = readLocalInferencePolicy();
+			let localTransport: ReturnType<typeof createLocalInferenceTransport> | undefined;
+			const observeReadonly = prepareReadonlySessionEvidence(launch);
 			const pi = await loadPiCodingAgent();
 			const builtinMcpTools = launch.builtinMcpTools ?? [];
 			let readinessTool: ToolDefinition | undefined;
@@ -601,13 +614,41 @@ export function createDefaultChildSessionFactory(options: DefaultChildSessionFac
 					await shutdownSession(session);
 					throw new Error(`Required child extension failed during startup: ${requiredStartupErrors.join("; ")}`);
 				}
+				if (localInference) {
+					const original = session.agent.streamFunction;
+					if (typeof original !== "function") {
+						session.dispose();
+						throw new Error("Local-AI fork cannot enforce inference deadlines: Pi streamFunction is unavailable. Check runtime compatibility before launching work.");
+					}
+					localTransport = createLocalInferenceTransport();
+					session.agent.streamFunction = localTransport.wrap(original.bind(session.agent));
+					sessionManager.appendCustomEntry("pi-subagents:local-inference-policy", {
+						version: 1, executionDeadline: "disabled", headersTimeout: 0, bodyTimeout: 0,
+						requestDeadline: "disabled", cancellation: "operator", notice: LOCAL_INFERENCE_POLICY_NOTICE,
+					});
+				}
 				return session;
 			};
 			const opened = loading.catch(() => {}).then(open);
 			loading = opened;
 			const session = await opened;
+			let evidence: ReturnType<NonNullable<typeof observeReadonly>["observe"]>;
+			try { evidence = observeReadonly?.observe(pi, modelRuntime, session); }
+			catch (error) { session.dispose(); await localTransport?.close(); throw error; }
 			let pending: Promise<void> | undefined;
-			const shutdown = () => shutdownSession(session);
+			let childRef: ChildSession | undefined;
+			const shutdown = async (): Promise<void> => {
+				try { evidence?.beforeShutdown(); } catch { /* evidence must never block shutdown */ }
+				try {
+					await shutdownSession(session);
+				} catch (error) {
+					evidence?.invalidate();
+					launch.onExtensionError?.({ extensionPath: "<session>", event: "session_shutdown", error });
+				} finally {
+					await localTransport?.close();
+					if (childRef) evidence?.finish(childRef);
+				}
+			};
 			// Outside the launch lock: MCP servers connect after `session_start` without reading the per-launch env.
 			if (builtinMcp) {
 				const cancel = new AbortController();
@@ -630,11 +671,15 @@ export function createDefaultChildSessionFactory(options: DefaultChildSessionFac
 			}
 			const child: ChildSession = {
 				subscribe: (listener) => session.subscribe((event) => listener(event as unknown as ChildSessionEvent)),
-				prompt: (text) => session.prompt(text),
+				prompt: (text) => {
+					if (!evidence) return session.prompt(text);
+					try { evidence.start(); } catch (error) { return Promise.reject(error); }
+					return session.prompt(text).then(() => evidence?.settled(), (error) => { evidence?.invalidate(); throw error; });
+				},
 				...(commands ? { finishCommands: () => commands.finish() } : {}),
-				steer: (text) => session.steer(text),
-				followUp: (text) => session.followUp(text),
-				abort: () => session.abort(),
+				steer: (text) => { evidence?.invalidate(); return session.steer(text); },
+				followUp: (text) => { evidence?.invalidate(); return session.followUp(text); },
+				abort: () => { evidence?.invalidate(); return session.abort(); },
 				hasQueuedMessages: () => session.agent?.hasQueuedMessages?.() === true,
 				dispose: () => {
 					if (!pending) {
@@ -654,6 +699,17 @@ export function createDefaultChildSessionFactory(options: DefaultChildSessionFac
 				get virtualModelId() { return session.model?.api === "pi-virtual" ? `${session.model.provider}/${session.model.id}` : undefined; },
 				get contextWindow() { return session.model?.contextWindow; },
 			};
+			childRef = child;
+			if (evidence && session.model) readonlyModels.set(child, {
+				current: toModelInfo(session.model),
+				requestBytes: Buffer.byteLength(session.systemPrompt) + Buffer.byteLength(JSON.stringify(session.agent.state.tools)),
+				resolve(reference) {
+					try {
+						const resolved = pi.resolveCliModel({ cliModel: reference, modelRuntime });
+						return !resolved.error && resolved.model ? toModelInfo(resolved.model) : undefined;
+					} catch { return undefined; }
+				},
+			});
 			live.add(child);
 			return child;
 		},
