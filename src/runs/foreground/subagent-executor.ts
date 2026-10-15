@@ -3510,7 +3510,7 @@ async function waitForWorkflowAsyncSingleResult(
 	return importWorkflowAwaitedChildResult(completed, { runId: options.runId, asyncDir, resultPath, task: options.task, parentWorkflowRunId: params.workflowParentRunId, details: launchResult.details, state: options.state, pi: options.pi });
 }
 
-async function runAsyncPath(data: ExecutionContextData, deps: ExecutorDeps): Promise<AgentToolResult<Details> | null> {
+async function runAsyncPath(data: ExecutionContextData, deps: ExecutorDeps, onLaunch?: () => void): Promise<AgentToolResult<Details> | null> {
 	const {
 		params,
 		effectiveCwd,
@@ -3607,6 +3607,7 @@ async function runAsyncPath(data: ExecutionContextData, deps: ExecutorDeps): Pro
 		if (launchRuleError) return toExecutionErrorResult(params, new Error(launchRuleError), data.contextPolicy.contextSummary);
 		const asyncResult = await executeAsyncSingle(id, compactOptional<Parameters<typeof executeAsyncSingle>[1]>({
 			toolCallId: data.toolCallId,
+			onLaunch,
 			agent: params.agent!,
 			task: shouldForkAgent(contextPolicy, params.agent!) ? wrapForkTask(params.task ?? "") : (params.task ?? ""),
 			goal: params.task ?? "",

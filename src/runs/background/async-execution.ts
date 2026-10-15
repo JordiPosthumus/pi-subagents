@@ -269,6 +269,8 @@ interface AsyncChainParams {
 interface AsyncSingleParams {
 	/** Originating executor invocation, distinct from the async run id. */
 	toolCallId?: string;
+	/** Publish workflow ownership after lifecycle persistence and before runner proceed. */
+	onLaunch?: () => void;
 	agent: string;
 	task?: string;
 	/** Raw caller-facing goal used only by the started event. */
