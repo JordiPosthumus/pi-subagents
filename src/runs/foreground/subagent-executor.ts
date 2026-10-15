@@ -5396,6 +5396,9 @@ export function createSubagentExecutor(deps: ExecutorDeps): {
 		deps.state.foregroundRuns ??= new Map();
 		deps.state.foregroundControls ??= new Map();
 		deps.state.lastForegroundControlId ??= null;
+		if (params.outputMode !== undefined && params.outputMode !== "inline" && params.outputMode !== "file-only") {
+			return buildRequestedModeError(params, "outputMode must be 'inline' or 'file-only'.");
+		}
 		const normalizedGate = normalizeGateParams(params);
 		if (!normalizedGate.ok) return buildRequestedModeError(params, normalizedGate.error);
 		let requestParams = normalizedGate.params;
@@ -7961,7 +7964,8 @@ export function createSubagentExecutor(deps: ExecutorDeps): {
 				deps.state.liveAsyncSessionRoots ??= new Map();
 				deps.state.liveAsyncSessionRoots.set(asyncRunId, sessionRoot);
 			}
-			if (workflowLaunchObserver) {
+			const publishWorkflowLaunch = () => {
+				if (!workflowLaunchObserver) return;
 				const singleTask = hasTasks && effectiveParams.tasks?.length === 1 ? effectiveParams.tasks[0] : undefined;
 				const singleSessionName = hasSingle
 					? deriveChildSessionName({ agent: effectiveParams.agent!, task: effectiveParams.task })
@@ -7977,8 +7981,10 @@ export function createSubagentExecutor(deps: ExecutorDeps): {
 					workflowLaunchObservers.delete(params);
 					workflowLaunchObserver(launch);
 				}
-			}
-			const asyncResult = await runAsyncPath(execData, deps);
+			};
+			// Async children publish only after durable lifecycle state exists, before runner proceed.
+			if (!effectiveAsync) publishWorkflowLaunch();
+			const asyncResult = await runAsyncPath(execData, deps, publishWorkflowLaunch);
 			if (asyncResult) {
 				asyncLaunchFailed = asyncResult.isError === true;
 				return attachMission(withRunFanoutBudget(withResolvedContext(asyncResult, contextPolicy.contextSummary), runFanoutBudget));

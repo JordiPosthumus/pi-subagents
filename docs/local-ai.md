@@ -73,3 +73,11 @@ After changing these settings, wait for active work to finish and use `/reload` 
 All regression fixtures have separate settings, credentials, session storage, agent definitions and runtime directories. They do not load the owner's projects or contact live model servers. The test harness has a watchdog to stop a broken test; that watchdog is never a production inference setting.
 
 GitHub Actions runs this gate on the maintained branch. Upstream changes should be brought into a review branch, checked, and then merged into `codex/local-ai`. Never resolve a merge by dropping the policy or its behavioral tests. The updater repeats the checks locally against the installed Pi runtime before adoption; a green source-only test is not enough.
+
+## Background workflow admission failures
+
+A workflow child rejected during launch preparation (for example, because every candidate model is excluded) must not be recorded as a launched background child. The workflow publishes the child's background identity only after the runner's status and process lifecycle records exist, before the startup barrier allows it to execute. Preparation failures therefore settle without waiting for nonexistent child records, and the existing workflow capacity reconciliation releases their slot.
+
+This does not expire paused jobs or relax process-exit proof for children that started. The regression fixture first excludes its only model, verifies the failed workflow releases a one-slot limit, then launches a successful workflow in the same session. It also rejects unsupported `outputMode` values at the public launch boundary, rather than saving recovery descriptors that resume cannot read. Supported values remain `inline` and `file-only`.
+
+Existing stuck reservations are not automatically discarded by this change. Recovery requires inspection of the specific owner and child evidence, a backup, and verification that no work remains alive. Keep run artifacts: removing history is not a capacity repair. The checked updater remains the adoption path after the fix is merged; existing Pi sessions require an idle reload or restart to activate new code.
