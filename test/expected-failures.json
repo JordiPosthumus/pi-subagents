@@ -1,0 +1,27 @@
+{
+  "note": "Top-level TAP suite names that fail identically on the pristine tree (environment-specific: external CLI adapters, doctor, Orca/Herdr tabs, worktree observers). After a rebase, any failure NOT in this list is a real regression; anything in this list that starts passing means update this file.",
+  "generated": "2026-10-15",
+  "command": "npm run test:unit",
+  "expectedFailingSuites": [
+    "Claude Code adapter",
+    "Codex exec adapter",
+    "Cursor Agent adapter",
+    "Herdr inspector",
+    "a missing predecessor marker does not delay the next tab",
+    "buildDoctorReport",
+    "create stdout preserves pretty-printed JSON in the observer manifest",
+    "creationSettled publishes the final manifest after capture and finish",
+    "disabled Orca progress tabs do not invoke Orca",
+    "enabled tabs use a worktree sequence and successful Pi sessions get cleanup guidance",
+    "malformed optional observer metadata cannot break child execution",
+    "mirror output keeps small writes that hit stream backpressure before the byte limit",
+    "mirror output truncates at a finite byte bound",
+    "native supervisor channel",
+    "owned process tree does not claim observed while a detached descendant remains",
+    "queued same-worktree creates start their timeout when the predecessor becomes active",
+    "queued tabs defer cleanup until their terminal create settles",
+    "same-worktree Orca creates wait for the previous numbered tab",
+    "typebox is a bundled runtime dependency",
+    "viewer strips split terminal control sequences across poll ticks"
+  ]
+}
