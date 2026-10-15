@@ -1,0 +1,37 @@
+{
+  "subagents": {
+    "defaultModel": "dsg-pool/qwen3.8-flash-next",
+    "defaultProvider": "dsg-pool",
+    "defaultThinking": "xhigh",
+    "agentOverrides": {
+      "delegate": {
+        "model": "dsg-pool/qwen3.8-flash-next",
+        "thinking": "xhigh"
+      },
+      "evidence-auditor": {
+        "model": "dsg-pool/qwen3.8-flash-next",
+        "thinking": "xhigh"
+      },
+      "oracle": {
+        "model": "dsg-pool/qwen3.8-flash-next",
+        "thinking": "xhigh"
+      },
+      "researcher": {
+        "model": "dsg-pool/qwen3.8-flash-next",
+        "thinking": "xhigh"
+      },
+      "reviewer": {
+        "model": "dsg-pool/qwen3.8-flash-next",
+        "thinking": "xhigh"
+      },
+      "scout": {
+        "model": "dsg-pool/qwen3.8-flash-next",
+        "thinking": "xhigh"
+      },
+      "worker": {
+        "model": "dsg-pool/qwen3.8-flash-next",
+        "thinking": "xhigh"
+      }
+    }
+  }
+}

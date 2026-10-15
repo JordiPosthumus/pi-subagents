@@ -46,6 +46,23 @@ Future updates: rerun the checked updater from the fork checkout. A normal `pi u
 
 Rollback: when work is idle, restore the backed-up `settings.json` and `subagent-config.json` to their original locations and restart Pi. Keep the backup and existing package files until the replacement is verified.
 
+## Pool selection and cached model exclusions
+
+These are standard upstream configuration controls, separate from the fork's HTTP timeout fix. The owner's verified setup is supplied as mergeable examples:
+
+- [Pi settings fragment](../examples/local-ai/settings.fragment.json): merge into `~/.pi/agent/settings.json`. It selects `dsg-pool/qwen3.8-flash-next` and `xhigh` for subagents, with explicit overrides for the seven native roles. The overrides also replace builtin role thinking defaults. External CLI role definitions are not changed.
+- [Subagent config fragment](../examples/local-ai/subagent-config.fragment.json): merge into `~/.pi/agent/extensions/subagent/config.json`. It enables local inference and sets `modelExclusions.defaultTtlMs` to **60,000 ms (60 seconds)** instead of the upstream 24-hour default.
+
+These files are fragments, not complete replacement configurations. Preserve unrelated settings and nested role fields. The model identifier is specific to this owner's registered pool; other operators must use their own configured provider/model. The checked updater preserves these settings on subsequent upgrades.
+
+Pi's top-level default model does not change the model selected in a restored parent session. Explicit subagent defaults and role overrides prevent that parent selection from routing ordinary native child launches to the standalone M3. Per-run model overrides and project/provider-specific settings can still take precedence. Validation in the owner's DSG project resolved all seven native roles to pool/xhigh with either `dsg-m3` or `dsg-pool` as the parent provider.
+
+The upstream extension automatically persists some provider/model failures as exclusions. Fixing request timeouts does not clear an exclusion already written to disk, and restarting reloads that exclusion. A pre-fix `Request timed out.` entry caused the observed M3 rejection after installation; it was backed up and removed specifically, then both configured model candidates were verified as eligible.
+
+A 60-second cooldown is **not an inference deadline** and does not disable exclusions: repeated failures can create another cooldown, and the setting applies to all exclusion reasons. Lowering the configured duration also shortens existing entries from their original recording time. No exclusion-policy source change is included here.
+
+After changing these settings, wait for active work to finish and use `/reload` or restart Pi; running children retain their existing launch configuration. Neither operation is performed automatically.
+
 ## Checks before an update is adopted
 
 1. Typecheck and focused policy, capacity and child-session tests.
