@@ -5,7 +5,6 @@ import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 import type { Message } from "@earendil-works/pi-ai";
 import { installRunnerHttpDispatcher } from "./runner-http-dispatcher.ts";
-import { arbitrateCompletionGuardRescue, createTaskMutationArbiter } from "../shared/llm-intent-arbiter.ts";
 import { readLocalInferencePolicy, withoutExecutionDeadline, LOCAL_INFERENCE_POLICY_NOTICE } from "../shared/local-inference-policy.ts";
 
 // Detached runners skip Pi's CLI proxy setup. Keep fetch on the same Undici dispatcher.

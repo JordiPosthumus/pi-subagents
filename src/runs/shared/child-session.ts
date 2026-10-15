@@ -21,7 +21,7 @@ import { PI_CODING_AGENT_PACKAGE, resolveInstalledPiPackageRoot, resolvePiPackag
 import type { ChildRuntimeConfig } from "./child-runtime-config.ts";
 import type { RequiredChildExtensionSnapshot } from "../../shared/required-child-extensions.ts";
 import type { HerdrMachineReference, HerdrRemoteGitStatus } from "../../shared/types.ts";
-import { prepareReadonlySessionEvidence } from "./readonly-session-evidence.ts";
+import type { prepareReadonlySessionEvidence } from "./readonly-session-evidence.ts";
 import { toModelInfo, type ModelInfo } from "../../shared/model-info.ts";
 import { readLocalInferencePolicy, LOCAL_INFERENCE_POLICY_NOTICE } from "./local-inference-policy.ts";
 import { createLocalInferenceTransport } from "./local-inference-transport.ts";
@@ -467,7 +467,9 @@ export function createDefaultChildSessionFactory(options: DefaultChildSessionFac
 			const disposalsAtStart = disposals;
 			const localInference = readLocalInferencePolicy();
 			let localTransport: ReturnType<typeof createLocalInferenceTransport> | undefined;
-			const observeReadonly = prepareReadonlySessionEvidence(launch);
+			// Deferred import: the evidence module pulls child-hooks → fanout-child → the executor,
+			// which must stay lazy at extension-import time (lazy-loading contract).
+			const observeReadonly = (await import("./readonly-session-evidence.ts").then((m) => m.prepareReadonlySessionEvidence))(launch) as ReturnType<typeof prepareReadonlySessionEvidence> | undefined;
 			const pi = await loadPiCodingAgent();
 			const builtinMcpTools = launch.builtinMcpTools ?? [];
 			let readinessTool: ToolDefinition | undefined;
